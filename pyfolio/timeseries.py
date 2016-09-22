@@ -1045,20 +1045,7 @@ def forecast_cone_bootstrap(is_returns, num_days, cone_std=(1., 1.5, 2.),
         samples[i, :] = is_returns.sample(num_days, replace=True,
                                           random_state=seed)
 
-    cum_samples = np.cumprod(1 + samples, axis=1) * starting_value
-
-    cum_mean = cum_samples.mean(axis=0)
-    cum_std = cum_samples.std(axis=0)
-
-    if isinstance(cone_std, (float, int)):
-        cone_std = [cone_std]
-
-    cone_bounds = pd.DataFrame(columns=pd.Float64Index([]))
-    for num_std in cone_std:
-        cone_bounds.loc[:, float(num_std)] = cum_mean + cum_std * num_std
-        cone_bounds.loc[:, float(-num_std)] = cum_mean - cum_std * num_std
-
-    return cone_bounds
+    return summarize_paths(samples)
 
 
 def extract_interesting_date_ranges(returns):
@@ -1090,3 +1077,19 @@ def extract_interesting_date_ranges(returns):
             continue
 
     return ranges
+
+
+def summarize_paths(samples, cone_std=(1., 1.5, 2.), starting_value=1.):
+    cum_samples = np.cumprod(1 + samples, axis=1) * starting_value
+    cum_mean = cum_samples.mean(axis=0)
+    cum_std = cum_samples.std(axis=0)
+
+    if isinstance(cone_std, (float, int)):
+        cone_std = [cone_std]
+
+    cone_bounds = pd.DataFrame(columns=pd.Float64Index([]))
+    for num_std in cone_std:
+        cone_bounds.loc[:, float(num_std)] = cum_mean + cum_std * num_std
+        cone_bounds.loc[:, float(-num_std)] = cum_mean - cum_std * num_std
+
+    return cone_bounds

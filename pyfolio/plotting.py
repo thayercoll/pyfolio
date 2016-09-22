@@ -1659,9 +1659,9 @@ def plot_prob_profit_trade(round_trips, ax=None):
     return ax
 
 
-def plot_multistrike_cones(is_returns, oos_returns, num_samples=1000,
-                           name=None, ax=None, cone_std=(1., 1.5, 2.),
-                           random_seed=None, num_strikes=0):
+def _plot_multistrike_cones(oos_returns, bounds, num_samples=1000,
+                            name=None, ax=None, cone_std=(1., 1.5, 2.),
+                            random_seed=None, num_strikes=0):
     """
     Plots the upper and lower bounds of an n standard deviation
     cone of forecasted cumulative returns. This cone is non-parametric,
@@ -1716,12 +1716,7 @@ def plot_multistrike_cones(is_returns, oos_returns, num_samples=1000,
         axes = ax
 
     returns = empyrical.cum_returns(oos_returns, starting_value=1.)
-    bounds = timeseries.forecast_cone_bootstrap(is_returns,
-                                                len(oos_returns),
-                                                cone_std=cone_std,
-                                                num_samples=num_samples,
-                                                random_seed=random_seed)
-    bounds.index = oos_returns.index
+
     bounds_tmp = bounds.copy()
     returns_tmp = returns.copy()
     cone_start = returns.index[0]
@@ -1758,3 +1753,66 @@ def plot_multistrike_cones(is_returns, oos_returns, num_samples=1000,
         return fig
     else:
         return axes
+
+
+def plot_account_cone(is_returns, oos_returns,
+                      num_samples=1000,
+                      name=None,
+                      ax=None,
+                      cone_std=(1., 1.5, 2.),
+                      random_seed=None,
+                      num_strikes=0):
+
+    bounds = timeseries.forecast_cone_bootstrap(is_returns,
+                                                len(oos_returns),
+                                                cone_std=cone_std,
+                                                num_samples=num_samples,
+                                                random_seed=random_seed)
+    bounds.index = oos_returns.index
+
+    return _plot_multistrike_cones(is_returns, oos_returns, bounds,
+                                   num_samples=num_samples,
+                                   name=name,
+                                   ax=ax,
+                                   cone_std=cone_std,
+                                   random_seed=random_seed,
+                                   num_strikes=num_strikes)
+
+
+def plot_portfolio_cones(account_names, account_returns, live_returns,
+                         start_dates,
+                         num_samples=1000,
+                         ax=None,
+                         cone_std=(1., 1.5, 2.),
+                         random_seed=None,
+                         num_strikes=0):
+
+    cones = {}
+    for name in account_names:
+        start_date = start_dates.get(name, None)
+        is_returns = account_returns[name].dropna(
+            ).loc[account_returns[name].dropna().index < start_date]
+        oos_returns = live_returns.loc[name,
+                                       live_returns.major_axis >= start_date,
+                                       'returns'].dropna()
+
+        paths = timeseries.forecast_cone_bootstrap(
+            is_returns, len(oos_returns),
+            cone_std=cone_std,
+            num_samples=50000,
+            random_seed=random_seed)
+        cones[name] = pd.DataFrame(paths.T, index=oos_returns.index)
+
+    start_date = start_dates.get('portfolio', None)
+    bounds = timeseries.summarize_paths(pd.Panel(cones).mean(axis='items').T)
+    bounds.index = live_returns.loc['portfolio',
+                                    live_returns.major_axis >= start_date,
+                                    'returns'].dropna()
+
+    return _plot_multistrike_cones(is_returns, oos_returns, bounds,
+                                   num_samples=num_samples,
+                                   name='portfolio',
+                                   ax=ax,
+                                   cone_std=cone_std,
+                                   random_seed=random_seed,
+                                   num_strikes=num_strikes)
